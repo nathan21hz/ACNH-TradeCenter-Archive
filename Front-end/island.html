@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>动森大头菜交易平台</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta http-equiv="Pragma" content="no-cache" />
+  <link href="https://cdn.staticfile.org/element-ui/2.13.0/theme-chalk/index.css" rel="stylesheet">
+</head>
+<body style="margin: 0px;font-family: 'Helvetica Neue',Helvetica,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','微软雅黑',Arial,'sans-serif';">
+  <div id="app">
+      <el-container>
+        <el-header style="background: #99a9bf;text-align: center;color: white;">
+          <el-row :gutter="20">
+            <el-col :span="4"><a href="index.html" style="text-decoration: none;color: #FFFFFF;"><h4>返回主页</h4></a></el-col>
+            <el-col :span="16"><h2>动森大头菜交易平台 - 岛主端</h2></el-col>
+            <el-col :span="4"></el-col>
+          </el-row>
+        </el-header>
+        <el-main>
+          <el-form ref="form" :model="form" label-width="100px">
+            <el-form-item label="无人岛名称">
+              <el-input v-model="form.name" style="width: 200px;"></el-input>
+            </el-form-item>
+            <el-form-item label="大头菜价格">
+              <el-input v-model="form.price"style="width: 200px;"></el-input>
+            </el-form-item>
+            <el-form-item label="登岛密码">
+              <el-input v-model="form.password"style="width: 200px;"></el-input>
+            </el-form-item>
+            <el-form-item label="分类">
+              <el-cascader
+                v-model="form.catalog"
+                :options="cat_options"
+                :props="cat_props"
+                :show-all-levels="false"
+                clearable>
+              </el-cascader>
+            </el-form-item>
+            <el-form-item label="备注">
+              <el-input v-model="form.remark"style="width: 500px;"></el-input>
+            </el-form-item>
+            <el-form-item label="最大人数">
+              <el-input-number v-model="form.max_seller" style="width: 200px;" :min="1" :max="6" step-strictly></el-input-number>
+            </el-form-item>
+            <el-form-item label="私人岛">
+              <el-tooltip effect="dark" placement="right">
+                <div slot="content">
+                  如果启用私人岛，岛屿将不会在公开列表中显示<br>请在开岛后复制岛屿ID并提供给股民，股民需通过ID加入
+                </div>
+                <el-switch
+                  v-model="form.private"
+                  active-text="私人"
+                  inactive-text="公开">
+                </el-switch>
+              </el-tooltip>
+            </el-form-item>
+            <el-form-item label="审核状态">
+              <el-tag type="success" v-if="audit==0">通过</el-tag>
+              <el-tag type="warning" v-else-if="audit==2">审核中</el-tag>
+              <el-tag type="danger" v-else-if="audit==1">未通过</el-tag>
+              <el-tag type="info" v-else-if="audit==4">未开岛</el-tag>
+              <el-tag type="warning" v-else>错误</el-tag>
+            </el-form-item>
+            <el-form-item>
+              <div v-if="status==0">
+                <el-button type="primary" @click="onOpenIsland">开放</el-button>
+              </div>
+              <div v-if="status==1">
+                <el-tooltip effect="dark" placement="right">
+                  <div slot="content">
+                  关闭岛屿，所有加入和排队的股民都会被踢出<br>更新信息请使用“更新信息”按钮
+                  </div>
+                  <el-button type="warning" @click="onCloseIsland">关闭</el-button>
+                </el-tooltip>
+                <el-button type="primary" @click="onUpdateIsland">更新信息</el-button>
+                <el-button type="primary" @click="onCopyID">复制岛屿ID</el-button>
+              </div>
+            </el-form-item>
+          </el-form>
+          <h4 style="color: #EF4D74">
+            ！！开岛后请勿随意刷新页面，更换密码请使用“更新信息”按钮！！<br>
+            任何岛主都请设置真实价格（或0）/ 请勿开岛发公告 否则可能被封禁IP<br>
+            预防炸岛建议您留下联系方式（可写在密码栏）
+          </h4>
+          <h3>信息正在被分享至：</h3><el-button type="primary" @click="refreshStatus">刷新列表</el-button>  
+          <el-table
+            :data="sellers"
+            style="width: 100%">
+            <el-table-column
+              prop="seller_id"
+              label="ID">
+            </el-table-column>
+            <el-table-column
+              prop="name"
+              label="姓名">
+            </el-table-column>
+            <el-table-column label="上岛时长">
+              <template slot-scope="scope">
+                {{timeDelta(scope.row.join_time)}}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作">
+              <template slot-scope="scope">
+                <el-button
+                  size="mini"
+                  @click="onKickSeller(scope.row.seller_id)">踢出
+                </el-button>
+                <el-button 
+                  size="mini"
+                  @click="onReportSeller(scope.row.seller_id)">举报
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <h3>以下股民正在排队：</h3><el-button type="primary" @click="refreshStatus">刷新列表</el-button>  
+          <el-table
+            :data="queue"
+            style="width: 100%">
+            <el-table-column
+              prop="seller_id"
+              label="ID">
+            </el-table-column>
+            <el-table-column
+              prop="name"
+              label="姓名">
+            </el-table-column>
+            <el-table-column label="操作">
+              <template slot-scope="scope">
+                <el-button
+                  size="mini"
+                  @click="onReportSeller(scope.row.seller_id)">举报
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <br>
+          <el-collapse>
+            <el-collapse-item title="售后交流（请手动刷新）" name="1">
+              <el-input v-model="temp_msg" placeholder="请输入内容" style="width: 400px">
+                <el-button slot="prepend" icon="el-icon-refresh" @click="onGetMsg"></el-button>
+                <el-button slot="append" @click="onSendMsg">发送</el-button>
+              </el-input>
+              <el-table
+                :data="msg_list"
+                style="width: 100%">
+                <el-table-column
+                  prop="time"
+                  label="时间"
+                  width="120">
+                </el-table-column>
+                <el-table-column
+                  prop="name"
+                  label="来自"
+                  width="150">
+                  <template slot-scope="scope">
+                    【{{sender_type[scope.row.from_type]}}】 {{scope.row.from_name}}
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  prop="text"
+                  label="消息">
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+          </el-collapse>
+          <br>
+          <h4>如果本工具让您成功赚爆，不妨也让我恰一口？<a @click="dialogVisible = true" href="javascript:void(0);">给一口</a></h4>
+          <h4>使用反馈/Q&A/更新日志：<a href="https://support.qq.com/product/147107">点这里</a></h4>
+          <h4><a href="https://nga.178.com/read.php?tid=21071524">我的帖子</a></h4>
+          <h4><a href="javascript:void(0);" @click="dialogVisible3=true">使用须知</a></h4>
+          <br><br><br><br>
+
+          <el-dialog title="感谢支持" :visible.sync="dialogVisible">
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <div>
+                  <el-image src="http://mass-storage.21hz.top/public/pics/alipay.jpg" style="width: 100%"></el-image>
+                </div>
+              </el-col>
+              <el-col :span="12">
+                <div>
+                  <el-image src="http://mass-storage.21hz.top/public/pics/wechat.jpg" style="width: 100%"></el-image>
+                </div>
+              </el-col>
+            </el-row>
+          </el-dialog>
+
+          <el-dialog title="举报股民" :visible.sync="dialogVisible2">
+            <el-form :model="form_report" label-width="100px">
+              <el-form-item label="举报类型">
+                <el-select v-model="form_report.r_type" placeholder="请选择类型">
+                  <el-option label="姓名不符" value="11"></el-option>
+                  <el-option label="一号多开" value="12"></el-option>
+                  <el-option label="分享密码" value="13"></el-option>
+                  <el-option label="交易完毕长时间不退出" value="14"></el-option>
+                  <el-option label="其他" value="19"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="举报信息">
+                <el-input v-model="form_report.r_msg" autocomplete="off"></el-input>
+              </el-form-item>
+            </el-form>
+            <span slot="footer" class="dialog-footer">
+              <el-button @click="dialogVisible2 = false">取 消</el-button>
+              <el-button type="primary" @click="onSubmitReport">确 定</el-button>
+            </span>
+          </el-dialog>
+          
+          <el-dialog title="使用须知" :visible.sync="dialogVisible3">
+            <div>
+              <h4>Tips</h4>
+              1.岛主关岛/踢人/关闭页面 都会导致股民直接从排队/岛中退出 请使用更新信息功能<br>
+              2.慎用举报功能 密码错误请耐心等一会儿 等待岛主更换<br>
+              3.如果岛主对不炸岛没有信心建议留联系方式<br>
+              4.想暂停股民加入排队可以打开私人岛功能<br>
+              5.如果岛被长时占满建议减号踢掉所有人(保持本工具内排队不变) 让当前在岛上的人重进 可有效恢复秩序<br>
+              <h4>会被封禁的行为</h4>
+              1.任何设置虚假价格的行为(除大头菜交易外的岛主请设置价格为0或真实价格) - 2天<br>
+              2.超出正常使用范围的多开行为 - 1天<br>
+              3.发布不含上岛密码，只有微信、QQ等联系方式的交易广告 - 7天<br>
+              4.任何在交易中有欺骗行为的股民/岛主<br>
+              <h4>使用反馈/Q&A/更新日志：<a href="https://support.qq.com/product/147107">点这里</a></h4>
+            </div>
+          </el-dialog>
+
+        </el-main>
+        <el-footer style="color: #E9EEF3;text-align: center; font-size: 12px">
+          动森大头菜交易平台 V0.7.1<br>
+          ©2020 <a style="text-decoration: none;color: #E9EEF3;" href="https://github.com/nathan21hz">Nathan Cui</a>
+        </el-footer>
+      </el-container>
+    </div>
+</body>
+
+<script src="https://cdn.staticfile.org/vue/2.6.11/vue.min.js"></script>
+<script src="https://cdn.staticfile.org/element-ui/2.13.0/index.js"></script>
+<script src="https://cdn.staticfile.org/vue-resource/1.5.1/vue-resource.min.js"></script>
+<script src="https://cdn.staticfile.org/vue-clipboard2/0.3.1/vue-clipboard.min.js"></script>
+<script type="text/javascript">
+  var BASE_URL = "http://ttc.21hz.top/turniptrade/"
+  var BASE_URL_MSG = "http://ttcmsg.21hz.top/turniptrade/"
+  window.onbeforeunload = function (e) {
+    e = e || window.event;
+    if (e) {
+      e.returnValue = '刷新或关闭将导致当前页面信息丢失，是否继续？';
+    }
+    app.$message.warning('刷新或关闭将导致当前连接断开且无法找回 刷新列表请使用页面内按钮');
+    return '刷新或关闭将导致当前页面信息丢失，是否继续？';
+  };
+  var app = new Vue({
+    el: '#app',
+    data:{
+      island_id:"",
+      form:{
+        name:"",
+        price:"",
+        password:"",
+        remark:"",
+        max_seller:6,
+        private:false,
+        catalog:[]
+      },
+      form_report:{
+        seller_id:"",
+        r_type:"",
+        r_msg:""
+      },
+      status:0,
+      sellers:[],
+      queue:[],
+      timer:null,
+      token:"",
+      audit:4,
+      dialogVisible:false,
+      dialogVisible2:false,
+      dialogVisible3:true,
+      temp_msg:"",
+      msg_list:[],
+      sender_type:["岛主","股民","管理员"],
+      audit_type:["通过","未通过","审核中","审核错误","未开放"],
+      cat_props:{multiple: true},
+      cat_map:{1:"大头菜",
+        2:"其他交易",21:"家具",22:"服饰",23:"材料",24:"DIY手册",25:"其他",
+        3:"NPC",31:"绵儿",32:"俞司廷",33:"龙克斯",34:"薛革",35:"傅珂",36:"骆岚",37:"然然",38:"狐利"},
+      cat_options:[{
+          value: 1,
+          label: '大头菜',
+        }, {
+          value: 2,
+          label: '其他交易',
+          children: [{
+              value: 21,label: '家具'
+            }, {
+              value: 22,label: '服饰',
+            }, {
+              value: 23,label: '材料',
+            }, {
+              value: 24,label: 'DIY手册',
+            }, {
+              value: 25,label: '其他',
+            }]
+        }, {
+          value: 3,
+          label: 'NPC',
+          children: [{
+              value: 31,label: '绵儿',
+            }, {
+              value: 34,label: '薛革',
+            }, {
+              value: 35,label: '傅珂',
+            }, {
+              value: 36,label: '骆岚',
+            }, {
+              value: 37,label: '然然',
+            }, {
+              value: 38,label: '狐利',
+            }]
+        }]
+    },
+    mounted: function() {
+      var that = this
+      this.getNotifications()
+    },
+    beforeDestroy() {
+      clearInterval(this.timer);
+    },
+    methods:{
+      onCopyID(){
+        this.$copyText(this.island_id).then(
+            res => {
+              console.log(res)
+              this.$message("已成功复制，可直接去粘贴");
+            },
+            err => {
+              this.$message.error("复制失败");
+            }
+          )
+      },
+      onOpenIsland(){
+        if(this.form.name == "" || this.form.price == "" || this.form.password == ""){
+          this.$message.error('请将岛名、价格、密码填写好');
+        }else{
+          if (this.island_id == ""){
+            this.initIsland()
+            this.timer = setInterval(this.refreshStatus, 5000);
+          }
+          this.$http.post(BASE_URL + 'island/'+ this.island_id +'/open?token='+this.token,this.form).then(function(response){
+            if(response.data.status == 0){
+              this.$message.success('开放无人岛成功，正在等待股民');
+              this.refreshStatus()
+            } else {
+              this.$message.error('开放无人岛失败：'+response.data.msg);
+              this.refreshStatus()
+            }
+            console.log(response.data)
+          }, function(response){
+          // 响应错误回调
+          });
+        }
+      },
+      onCloseIsland(){
+        this.$http.post(BASE_URL + 'island/'+ this.island_id +'/close?token='+this.token,{}).then(function(response){
+            if(response.data.status == 0){
+              this.$message.success('关闭无人岛成功，信息将不会被继续公布');
+              this.refreshStatus()
+            } else {
+              this.$message.error('关闭无人岛失败：'+response.data.msg);
+              this.refreshStatus()
+            }
+            console.log(response.data)
+          }, function(response){
+          // 响应错误回调
+          });
+      },
+      onUpdateIsland(){
+        if(this.form.name == "" || this.form.price == "" || this.form.password == ""){
+          this.$message.error('请将岛名、价格、密码填写好');
+        } else {
+          this.$http.post(BASE_URL + 'island/'+ this.island_id +'/update?token='+this.token,this.form).then(function(response){
+            if(response.data.status == 0){
+              this.$message.success('更新信息成功');
+              this.refreshStatus()
+            } else {
+              this.$message.error('更新信息失败：'+response.data.msg);
+              this.refreshStatus()
+            }
+            console.log(response.data)
+          }, function(response){
+          // 响应错误回调
+          });
+        }
+      },
+      refreshStatus(){
+        var that = this
+        this.$http.get(BASE_URL + "island/"+this.island_id+"/status?token="+this.token).then(function(response){
+          if(response.data.stauts !=0 || response.data.stauts !=1){
+            that.island_id = response.data.island_id
+            that.status = response.data.status
+            that.sellers = response.data.sellers
+            that.queue = response.data.queue
+            that.audit = response.data.audit
+          } else {
+            taht.$message.error(response.data.msg);
+          }
+        })
+      },
+      initIsland(){
+        let request = new XMLHttpRequest()
+        request.open('GET', BASE_URL + "island/init", false) // 第三个参数 false 代表设置同步请求
+        request.send()
+        if (request.status === 200) {
+          data = JSON.parse(request.responseText)
+          this.island_id = data.island_id
+          this.token = data.token
+        } else {
+          this.$message('初始化无人岛信息失败');
+        }
+      },
+      onReportSeller(seller_id){
+        this.form_report.seller_id = seller_id
+        this.dialogVisible2 = true
+      },
+      onSubmitReport(){
+        this.$http.post(BASE_URL+"island/"+this.island_id+"/report?token="+this.token,this.form_report).then(function(response){
+          this.$message.success('举报成功 我们将核实后处理');
+          this.dialogVisible2 = false
+        },function(response){
+          this.$message('举报失败');
+          this.dialogVisible2 = false
+        })
+      },
+      onKickSeller(seller_id){
+        this.$http.post(BASE_URL+"island/"+this.island_id+"/kick?token="+this.token,{seller_id:seller_id}).then(function(response){
+          this.$message.success('操作成功')
+          this.refreshStatus()
+        },function(response){
+          this.$message('操作失败')
+        })
+      },
+      getNotifications(){
+        var that = this
+        this.$http.get(BASE_URL + "sys/notification").then(function(response){
+          that.notifications = response.data.notifications
+          that.notifications.forEach(function(noti){
+            that.$notify({
+              title: noti.title,
+              message: noti.msg
+            });
+          })
+        },function(response){
+        })
+      },
+      onSendMsg(){
+        if(this.status==0){
+          this.$message('尚未开岛')
+        } else {
+          this.$http.post(BASE_URL_MSG + "island/"+this.island_id+"/sendMsg?token="+this.token,{text:this.temp_msg}).then(
+            function(response){
+            this.$message('发送信息成功')
+            this.temp_msg = ""
+            this.onGetMsg()
+          },function(response){
+            this.$message('发送信息错误')
+          })
+        }
+      },
+      onGetMsg(){
+        if(this.status==0){
+          this.$message('尚未开岛')
+        } else {
+          this.$http.get(BASE_URL_MSG + "getMsg/"+this.island_id).then(function(response){
+            this.msg_list = response.data.msg_list
+          },function(response){
+            this.$message('刷新信息错误')
+          })
+        }
+      },
+      timeDelta(start_time){
+        var start_date = new Date(start_time * 1000)
+        var now = new Date()
+        var delta = now.getTime() - start_date.getTime()
+        var days=Math.floor(delta/(24*3600*1000))
+        //计算出小时数
+        var leave1=delta%(24*3600*1000)    //计算天数后剩余的毫秒数
+        var hours=Math.floor(leave1/(3600*1000))
+        //计算相差分钟数
+        var leave2=leave1%(3600*1000)        //计算小时数后剩余的毫秒数
+        var minutes=Math.floor(leave2/(60*1000))
+        //计算相差秒数
+        var leave3=leave2%(60*1000)      //计算分钟数后剩余的毫秒数
+        var seconds=Math.round(leave3/1000)
+        return hours+":"+minutes+":"+seconds
+      }
+    }
+  });
+</script>
+</html>

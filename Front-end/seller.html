@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>动森大头菜交易平台</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta http-equiv="Pragma" content="no-cache" />
+  <link href="https://cdn.staticfile.org/element-ui/2.13.0/theme-chalk/index.css" rel="stylesheet">
+</head>
+<body style="margin: 0px;font-family: 'Helvetica Neue',Helvetica,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','微软雅黑',Arial,'sans-serif';">
+  <div id="app">
+      <el-container>
+        <el-header style="background: #99a9bf;text-align: center;color: white;">
+          <el-row :gutter="20">
+            <el-col :span="4"><a href="index.html" style="text-decoration: none;color: #FFFFFF;"><h4>返回主页</h4></a></el-col>
+            <el-col :span="16"><h2>动森大头菜交易平台 - 股民端</h2></el-col>
+            <el-col :span="4"></el-col>
+          </el-row>
+        </el-header>
+        <el-main>
+          <el-form ref="form" :model="form" label-width="50px">
+            <el-form-item label="姓名">
+              <el-input v-model="form.name" style="width: 300px;" placehoder="请使用游戏内相同名字"></el-input>
+            </el-form-item>
+            <el-form-item label="类别">
+              <el-cascader
+                v-model="catalog"
+                :options="cat_options"
+                :props="cat_props"
+                :show-all-levels="false"
+                style="width: 400px"
+                clearable>
+              </el-cascader>
+            </el-form-item>
+          </el-form>
+          <div v-if="status==2">
+            <el-card class="box-card">
+              <div slot="header" class="clearfix">
+                <span>排队中 <b>{{island_info.name}}</b></span>
+                <el-button
+                    size="mini"
+                    @click="onQuitIsland()"
+                    style="">退出排队</el-button>
+              </div>
+              <div>价格：<b>{{island_info.price}}</b> 排队进度：<b>{{island_info.queue_pos}} / {{island_info.queue_length}}</b></div>
+              <div>TAGs: <el-tag v-for="c in island_info.catalog">{{cat_map[c]}}</el-tag></div>
+              <div>岛主备注:{{island_info.remark}}</div>
+              <div style="font-size: 12px;color: #909399;">(如需更换无人岛请先退出当前排队)</div>
+          </div>
+          <div v-if="status!=1">
+            <h3>当前等待交易的无人岛：</h3>
+            <el-table
+              v-loading="loading"
+              :data="islands"
+              style="width: 100%"
+              stripe>
+              <el-table-column type="expand">
+                <template slot-scope="props">
+                  TAGs: <el-tag v-for="c in props.row.catalog">{{cat_map[c]}}</el-tag><br>
+                  备注：{{props.row.remark}}
+                </template>
+              </el-table-column>
+              <el-table-column
+                prop="name"
+                label="岛名"
+                width="100px">
+              </el-table-column>
+              <el-table-column
+                prop="price"
+                label="价格"
+                width="80px"
+                sortable>
+              </el-table-column>
+              <el-table-column
+                label="类别"
+                width="130px">
+                <template slot-scope="scope">
+                  {{getCatStr(scope.row.catalog)}}
+                </template>
+              </el-table-column>
+              <el-table-column
+                label="备注">
+                <template slot-scope="scope">
+                  {{cutStr(scope.row.remark)}}
+                </template>
+              </el-table-column>
+              <el-table-column label="现/满/队" width="100px">
+                <template slot-scope="scope">
+                  {{scope.row.seller_count}} / {{scope.row.max_seller}} / {{scope.row.queue_length}}
+                </template>
+              </el-table-column>
+              <el-table-column label="加入" width="150px">
+                <template slot="header" slot-scope="scope">
+                  <el-button
+                    size="mini"
+                    type="primary"
+                    @click="refreshIslands">刷新</el-button>
+                  <el-button
+                    size="mini"
+                    type="success"
+                    v-if="!auto_refresh_list"
+                    @click="onOpenAutoRefresh">自动</el-button>
+                  <el-button
+                    size="mini"
+                    type="warning"
+                    v-if="auto_refresh_list"
+                    @click="onCloseAutoRefresh">关闭</el-button>
+                </template>
+                <template slot-scope="scope">
+                  <el-button
+                    size="mini"
+                    @click="onJoinIsland(scope.row.island_id)"
+                    :disabled="status!=0">
+                    <div v-if="scope.row.seller_count < scope.row.max_seller">加入</div>
+                    <div v-else>排队</div>
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table><br>
+            通过岛屿ID连接：<br>
+            <el-input v-model="temp_island_id" placeholder="ID" style="width: 300px;"></el-input>
+            <el-button
+                    @click="onJoinIsland(temp_island_id)">加入</el-button>
+          </div>
+          <div v-if="status==1">
+            <h3 style="color: #EF4D74">！！保护交易环境 请勿分享该无人岛密码！！</h3>
+            <h3>请尽量从岛上机场离开，交易中保持本网页打开，交易结束后尽快退出</h3>
+            <el-form label-width="100px">
+              <el-form-item label="岛名">
+                {{island_info.name}}
+              </el-form-item>
+              <el-form-item label="价格">
+                {{island_info.price}}
+              </el-form-item>
+              <el-form-item label="密码">
+                {{island_info.password}}
+              </el-form-item>
+              <el-form-item label="类别">
+                <el-tag v-for="c in island_info.catalog">{{cat_map[c]}}</el-tag>
+              </el-form-item>
+              <el-form-item label="备注">
+                {{island_info.remark}}
+              </el-form-item>
+              <el-form-item label="剩余时间">
+                <b>{{countdown}}s</b>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="extendTradeTime">续期</el-button> 
+                <el-button type="primary" @click="onQuitIsland">退出</el-button> 
+                <el-button type="warning" @click="onReportIsland">举报岛主</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+          <br>
+          <el-collapse>
+            <el-collapse-item title="售后交流（请手动刷新）" name="1">
+              <el-input v-model="temp_msg" placeholder="请输入内容" style="width: 400px">
+                <el-button slot="prepend" icon="el-icon-refresh" @click="onGetMsg"></el-button>
+                <el-button slot="append" @click="onSendMsg">发送</el-button>
+              </el-input>
+              <el-table
+                :data="msg_list"
+                style="width: 100%">
+                <el-table-column
+                  prop="time"
+                  label="时间"
+                  width="120">
+                </el-table-column>
+                <el-table-column
+                  prop="name"
+                  label="来自"
+                  width="150">
+                  <template slot-scope="scope">
+                    【{{sender_type[scope.row.from_type]}}】 {{scope.row.from_name}}
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  prop="text"
+                  label="消息">
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+          </el-collapse>
+          <br>
+          <h4>如果本工具让您成功赚爆，不妨也让我恰一口？<a @click="dialogVisible = true" href="javascript:void(0);">给一口</a></h4>
+          <h4>使用反馈/Q&A/更新日志：<a href="https://support.qq.com/product/147107">点这里</a></h4>
+          <h4><a href="https://nga.178.com/read.php?tid=21071524">我的帖子</a></h4>
+          <br><br><br><br>
+
+          <el-dialog title="感谢支持" :visible.sync="dialogVisible">
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <div>
+                  <el-image src="http://mass-storage.21hz.top/public/pics/alipay.jpg" style="width: 100%"></el-image>
+                </div>
+              </el-col>
+              <el-col :span="12">
+                <div>
+                  <el-image src="http://mass-storage.21hz.top/public/pics/wechat.jpg" style="width: 100%"></el-image>
+                </div>
+              </el-col>
+            </el-row>
+          </el-dialog>
+
+          <el-dialog title="举报岛主" :visible.sync="dialogVisible2">
+            <el-form :model="form_report" label-width="100px">
+              <el-form-item label="举报类型">
+                <el-select v-model="form_report.r_type" placeholder="请选择类型">
+                  <el-option label="发布虚假信息" value="1"></el-option>
+                  <el-option label="一岛多开" value="2"></el-option>
+                  <el-option label="破坏交易环境（真实货币交易/只留联系方式的广告）" value="3"></el-option>
+                  <el-option label="其他" value="9"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="举报信息">
+                <el-input v-model="form_report.r_msg" autocomplete="off"></el-input>
+              </el-form-item>
+            </el-form>
+            <span slot="footer" class="dialog-footer">
+              <el-button @click="dialogVisible2 = false">取 消</el-button>
+              <el-button type="primary" @click="onSubmitReport">确 定</el-button>
+            </span>
+          </el-dialog>
+
+          <el-dialog title="使用须知" :visible.sync="dialogVisible3">
+            <div>
+              <h4>Tips</h4>
+              1.岛主关岛/踢人/关闭页面 都会导致股民直接从排队/岛中退出 请使用更新信息功能<br>
+              2.慎用举报功能 密码错误请耐心等一会儿 等待岛主更换<br>
+              3.如果岛主对不炸岛没有信心建议留联系方式<br>
+              4.想暂停股民加入排队可以打开私人岛功能<br>
+              5.如果岛被长时占满建议减号踢掉所有人(保持本工具内排队不变) 让当前在岛上的人重进 可有效恢复秩序<br>
+              <h4>会被封禁的行为</h4>
+              1.任何设置虚假价格的行为(除大头菜交易外的岛主请设置价格为0或真实价格) - 2天<br>
+              2.超出正常使用范围的多开行为 - 1天<br>
+              3.发布不含上岛密码，只有微信、QQ等联系方式的交易广告 - 7天<br>
+              4.任何在交易中有欺骗行为的股民/岛主<br>
+              <h4>使用反馈/Q&A/更新日志：<a href="https://support.qq.com/product/147107">点这里</a></h4>
+            </div>
+          </el-dialog>
+
+          <audio controls="controls" hidden src="http://mass-storage.21hz.top/public/audio/alert.mp3" ref="audio"></audio>
+
+        </el-main>
+        <el-footer style="color: #E9EEF3;text-align: center; font-size: 12px">
+          动森大头菜交易平台 V0.7.1<br>
+          ©2020 <a style="text-decoration: none;color: #E9EEF3;" href="https://github.com/nathan21hz">Nathan Cui</a>
+        </el-footer>
+      </el-container>
+    </div>
+</body>
+
+<script src="https://cdn.staticfile.org/vue/2.6.11/vue.min.js"></script>
+<script src="https://cdn.staticfile.org/element-ui/2.13.0/index.js"></script>
+<script src="https://cdn.staticfile.org/vue-resource/1.5.1/vue-resource.min.js"></script>
+<script type="text/javascript">
+  var BASE_URL = "http://ttc.21hz.top/turniptrade/"
+  var BASE_URL_MSG = "http://ttcmsg.21hz.top/turniptrade/"
+  window.onbeforeunload = function (e) {
+    e = e || window.event;
+    if (e) {
+      e.returnValue = '刷新或关闭将导致当前页面信息丢失，是否继续？';
+    }
+    app.$message.warning('刷新或关闭将导致当前连接断开且无法找回 刷新列表请使用页面内按钮');
+    return '刷新或关闭将导致当前页面信息丢失，是否继续？';
+  };
+  var app = new Vue({
+    el: '#app',
+    data:{
+      seller_id:"",
+      form:{
+        name:"",
+      },
+      form_report:{
+        island_id:"",
+        r_type:"",
+        r_msg:""
+      },
+      temp_island_id:"",
+      status:0,
+      islands:[],
+      timer:null,
+      timer_countdown:null,
+      timer_refresh_list:null,
+      auto_refresh_list:false,
+      countdown:300,
+      island_info:{},
+      loading:false,
+      notifications:[],
+      dialogVisible:false,
+      dialogVisible2:false,
+      dialogVisible3:true,
+      temp_msg:"",
+      msg_list:[],
+      sender_type:["岛主","股民","管理员"],
+      catalog:[],
+      cat_props:{multiple: true},
+      cat_map:{1:"大头菜",
+        2:"其他交易",21:"家具",22:"服饰",23:"材料",24:"DIY手册",25:"其他",
+        3:"NPC",31:"绵儿",32:"俞司廷",33:"龙克斯",34:"薛革",35:"傅珂",36:"骆岚",37:"然然",38:"狐利"},
+      cat_options:[{
+          value: 1,
+          label: '大头菜',
+        }, {
+          value: 2,
+          label: '其他交易',
+          children: [{
+              value: 21,label: '家具'
+            }, {
+              value: 22,label: '服饰',
+            }, {
+              value: 23,label: '材料',
+            }, {
+              value: 24,label: 'DIY手册',
+            }, {
+              value: 25,label: '其他',
+            }]
+        }, {
+          value: 3,
+          label: 'NPC',
+          children: [{
+              value: 31,label: '绵儿',
+            }, {
+              value: 34,label: '薛革',
+            }, {
+              value: 35,label: '傅珂',
+            }, {
+              value: 36,label: '骆岚',
+            }, {
+              value: 37,label: '然然',
+            }, {
+              value: 38,label: '狐利',
+            }]
+        }]
+    },
+    mounted: function() {
+      var that = this
+      this.refreshIslands()
+      this.getNotifications()
+    },
+    beforeDestroy() {
+      clearInterval(this.timer);
+      clearInterval(this.timer_countdown);
+      clearInterval(this.timer_refresh_list);
+    },
+    methods:{
+      onJoinIsland(island_id){
+        if(this.form.name == ""){
+          this.$message.error('请先将姓名填写好');
+        }else{
+          if (this.seller_id == ""){
+            this.initIsland()
+          }
+          this.$http.post(BASE_URL + 'seller/'+ this.seller_id +'/join',{"name":this.form.name,"island":island_id}).then(function(response){
+            if(response.data.status == 0){
+              this.$message.success('加入无人岛成功');
+              this.refreshStatus()
+            }
+            else if(response.data.status == 1){
+              this.$message.success('加入排队成功');
+              this.refreshStatus()
+            }
+            else {
+              this.$message.error('加入无人岛失败：'+response.data.msg);
+              this.refreshStatus()
+            }
+            console.log(response.data)
+          }, function(response){
+          // 响应错误回调
+          });
+        }
+      },
+      onQuitIsland(){
+        this.$http.post(BASE_URL + 'seller/'+ this.seller_id +'/quit',this.form).then(function(response){
+            if(response.data.status == 0){
+              this.$message.success('退出无人岛成功');
+              this.refreshStatus()
+            } else {
+              this.$message.error('退出无人岛失败：'+response.data.msg);
+              this.refreshStatus()
+            }
+            console.log(response.data)
+          }, function(response){
+          // 响应错误回调
+          });
+      },
+      onOpenAutoRefresh(){
+        this.timer_refresh_list = setInterval(this.refreshIslands, 10000);
+        this.auto_refresh_list = true
+      },
+      onCloseAutoRefresh(){
+        clearInterval(this.timer_refresh_list)
+        this.auto_refresh_list = false
+      },
+      refreshStatus(){
+        var that = this
+        this.$http.get(BASE_URL + "seller/"+this.seller_id+"/status").then(function(response){
+          var prev_status = that.status
+          that.seller_id = response.data.seller_id
+          that.status = response.data.status
+          that.island_info = response.data.island
+          if(that.status == 0){
+            clearInterval(this.timer_countdown)
+            this.countdown = 300
+            clearInterval(this.timer)
+            this.timer = setInterval(this.refreshStatus, 40000);
+          } else if(that.status == 1) {
+            if(prev_status == 0 || prev_status == 2){
+              this.$refs.audio.currentTime = 0; //从头开始播放提示音
+              this.$refs.audio.play();
+            }
+            this.onCloseAutoRefresh()
+            clearInterval(this.timer_countdown)
+            this.timer_countdown = setInterval(this.tradeCountdown, 1000);
+            clearInterval(this.timer)
+            this.timer = setInterval(this.refreshStatus, 10000);
+          }
+          else if(that.status == 2) {
+            clearInterval(this.timer)
+            this.timer = setInterval(this.refreshStatus, 10000);
+          } else if(that.status == 99) {
+            this.$message.warning(response.data.msg);
+          } else {
+            this.$message.error(response.data.msg);
+            clearInterval(this.timer);
+            clearInterval(this.timer_countdown);
+            clearInterval(this.timer_refresh_list);
+          }
+        })
+      },
+      refreshIslands(){
+        this.loading = true
+        var cat_str = ""
+        for (var i=0;i<this.catalog.length;i++)
+        { 
+            cat_str += this.catalog[i][this.catalog[i].length-1]+","
+        }
+        cat_str = cat_str.substr(0, cat_str.length - 1)
+        var that = this
+        this.$http.get(BASE_URL + "island/list/1?cat="+cat_str).then(function(response){
+          if (response.data.status == 0){
+            that.islands = response.data.list
+          } else {
+            this.$message.warning(response.data.msg);
+          }
+          that.loading = false
+        },function(response){
+          that.loading = false
+        })
+      },
+      extendTradeTime(){
+        var that = this
+        this.$http.post(BASE_URL + "seller/"+this.seller_id+"/extend",{}).then(function(response){
+          this.$message.success('续期成功');
+          this.countdown = 300
+        },function(response){
+          
+        })
+      },
+      tradeCountdown(){
+        this.countdown -= 1
+        if(this.countdown == 0){
+          this.onQuitIsland()
+        }
+      },
+      initIsland(){
+        let request = new XMLHttpRequest()
+        request.open('GET', BASE_URL + "seller/init", false) // 第三个参数 false 代表设置同步请求
+        request.send()
+        if (request.status === 200) {
+          data = JSON.parse(request.responseText)
+          this.seller_id = data.seller_id
+        } else {
+          this.$message('初始化股民信息失败');
+        }
+      },
+      onReportIsland(){
+        this.form_report.island_id = this.island_info.island_id
+        this.dialogVisible2 = true
+      },
+      onSubmitReport(){
+        this.$http.post(BASE_URL+"seller/"+this.seller_id+"/report",this.form_report).then(function(response){
+          this.$message.success('举报成功 我们将核实后处理');
+          this.dialogVisible2 = false
+        },function(response){
+          this.$message('举报失败');
+          this.dialogVisible2 = false
+        })
+      },
+      getNotifications(){
+        var that = this
+        this.$http.get(BASE_URL + "sys/notification").then(function(response){
+          that.notifications = response.data.notifications
+          that.notifications.forEach(function(noti){
+            that.$notify({
+              title: noti.title,
+              message: noti.msg
+            });
+          })
+        },function(response){
+        })
+      },
+      cutStr(remark_str){
+        if(remark_str.length>=30){
+          var cut_str=remark_str.substring(0,30)+'...('+(remark_str.length-30).toString()+')'
+        } else {
+          var cut_str = remark_str
+        }
+        return(cut_str)
+      },
+      onSendMsg(){
+        if(this.status==0){
+          this.$message('尚未上岛')
+        } else {
+          this.$http.post(BASE_URL_MSG + "seller/"+this.seller_id+"/sendMsg",{text:this.temp_msg}).then(
+            function(response){
+            this.$message('发送信息成功')
+            this.temp_msg = ""
+            this.onGetMsg()
+          },function(response){
+            this.$message('发送信息错误')
+          })
+        }
+      },
+      onGetMsg(){
+        if(this.status==0){
+          this.$message('尚未上岛')
+        } else {
+          this.$http.get(BASE_URL_MSG + "getMsg/"+this.island_info.island_id).then(function(response){
+            this.msg_list = response.data.msg_list
+          },function(response){
+            this.$message('刷新信息错误')
+          })
+        }
+      },
+      getCatStr(cat_list){
+        if (cat_list.length==1){
+        	var cat_str = this.cat_map[cat_list[0]]
+        } else if (cat_list.length==2) {
+        	var cat_str = this.cat_map[cat_list[0]]+"/"+this.cat_map[cat_list[1]]
+        }
+        else if (cat_list.length>2){
+          var cat_str = this.cat_map[cat_list[0]]+"/"+this.cat_map[cat_list[1]]
+          cat_str += "/...("+(cat_list.length-2)+")"
+        }
+        return cat_str
+      }
+    }
+  });
+</script>
+
+</html>

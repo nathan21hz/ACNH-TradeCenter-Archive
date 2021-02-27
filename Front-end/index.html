@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>动森大头菜交易平台</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta http-equiv="Pragma" content="no-cache" />
+  <link href="https://cdn.staticfile.org/element-ui/2.13.0/theme-chalk/index.css" rel="stylesheet">
+</head>
+<body style="margin: 0px;font-family: 'Helvetica Neue',Helvetica,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','微软雅黑',Arial,'sans-serif';">
+  <div id="app">
+      <el-container>
+        <el-header style="background: #99a9bf;text-align: center;color: white;">
+          <h2>动森大头菜交易平台</h2><br>
+        </el-header>
+        <el-main style="text-align: center;">
+          <br>
+          <a href="island.html">
+            <el-button type="primary" plain style="width: 200px;height: 100px;font-size: 20px">我是岛主</el-button>
+          </a>
+          <br><br>
+          <a href="seller.html">
+            <el-button type="primary" plain style="width: 200px;height: 100px;font-size: 20px">我是股民</el-button>
+          </a>
+          <br><br><br>
+          <a href="http://dodopass.21hz.top/turnip/">
+            <el-button type="primary" plain style="width: 200px;height: 60px;font-size: 16px">预测股价</el-button>
+          </a>
+          <br><br><br>
+          当前活跃：岛主{{island_open_count}}/{{island_count}} | 股民{{seller_trade_count}}/{{seller_count}}
+          <el-button size="mini" @click="getInfo()">刷新</el-button>
+          <br><br><br><br>
+        </el-main>
+        <el-footer style="color: #E9EEF3;text-align: center; font-size: 12px">
+          动森大头菜交易平台 V0.7.1<br>
+          ©2020 <a style="text-decoration: none;color: #E9EEF3;" href="https://github.com/nathan21hz">Nathan Cui</a>
+        </el-footer>
+      </el-container>
+    </div>
+</body>
+
+<script src="https://cdn.staticfile.org/vue/2.6.11/vue.min.js"></script>
+<script src="https://cdn.staticfile.org/element-ui/2.13.0/index.js"></script>
+<script src="https://cdn.staticfile.org/vue-resource/1.5.1/vue-resource.min.js"></script>
+<script type="text/javascript">
+  var BASE_URL = "http://ttc.21hz.top/turniptrade/"
+  var app = new Vue({
+    el: '#app',
+    data:{
+      island_count:0,
+      island_open_count:0,
+      seller_count:0,
+      seller_trade_count:0
+    },
+    mounted: function() {
+      this.getInfo()
+    },
+    beforeDestroy() {
+    },
+    methods:{
+      getInfo(){
+        var that = this
+        this.$http.get(BASE_URL + "sys/info").then(function(response){
+          that.island_count = response.data.island_count
+          that.island_open_count = response.data.island_open_count
+          that.seller_count = response.data.seller_count
+          that.seller_trade_count = response.data.seller_trade_count
+        })
+      }
+    }
+  });
+</script>
+
+</html>
